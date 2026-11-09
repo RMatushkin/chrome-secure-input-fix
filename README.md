@@ -37,11 +37,16 @@ way to set command-line switches, so this watcher enforces it.
 
 ## How it works
 
-`watcher` listens for application launches. When Chrome starts **without** the flag
-(Dock, Spotlight, a link from another app, login item…), it quits Chrome gracefully and
-relaunches it with the flag plus `--restore-last-session`, so the same windows and tabs come back.
-This takes ~2–3 seconds and only happens at launch. If Chrome refuses to quit within ~15 s
-(e.g. a "Leave site?" dialog), the watcher gives up for that launch.
+`watcher` listens for application launches. When Chrome starts as a plain user launch,
+i.e. **with no command-line arguments** (Dock, Spotlight, a link from another app, login item…),
+it quits Chrome gracefully and relaunches it with the flag plus `--restore-last-session`,
+so the same windows and tabs come back. This takes ~2–3 seconds and only happens at launch.
+If Chrome refuses to quit within ~15 s (e.g. a "Leave site?" dialog), the watcher gives up for that launch.
+
+Chrome instances started **with their own arguments** are never touched — this covers
+[Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp), Puppeteer,
+Playwright, Selenium and `open -a "Google Chrome" --args …`. Restarting them would drop their
+`--user-data-dir` / `--remote-debugging-*` setup and break the automation. Such launches are logged.
 
 ## Install
 

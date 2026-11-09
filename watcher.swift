@@ -6,9 +6,10 @@
 // enabled after a password field was focused and the window went to background
 // (Chromium issue 567613584). That bug breaks Logi Options+ keystroke actions.
 //
-// Whenever Chrome is launched without the flag (Dock, Spotlight, a link from
-// another app, login item...), the watcher quits it gracefully and relaunches
+// Whenever Chrome is launched plainly, with no arguments (Dock, Spotlight, a link
+// from another app, login item...), the watcher quits it gracefully and relaunches
 // it with the flag plus --restore-last-session, so the same windows/tabs return.
+// Chrome started with its own arguments (DevTools MCP, Puppeteer...) is left alone.
 //
 // Remove once Google ships a fix: ./uninstall.sh
 
@@ -48,9 +49,22 @@ func arguments(of pid: pid_t) -> [String]? {
     return args
 }
 
-func hasFlag(_ app: NSRunningApplication) -> Bool {
-    guard let args = arguments(of: app.processIdentifier) else { return true } // unknown: leave it alone
-    return args.contains { $0.hasPrefix("--disable-features=") && $0.contains(featureName) }
+/// Only plain user launches (Dock, Spotlight, Finder, a link from another app,
+/// login item) are relaunched: they start Chrome with no arguments at all.
+/// Anything started with its own arguments — Chrome DevTools MCP, Puppeteer,
+/// Playwright, Selenium, `open --args ...`, or our own relaunch — is left alone,
+/// since restarting it would drop its --user-data-dir / --remote-debugging-* setup.
+func isPlainUserLaunch(_ app: NSRunningApplication) -> Bool {
+    guard let args = arguments(of: app.processIdentifier) else { return false } // unknown: leave it alone
+    let extra = args.dropFirst().filter { !$0.hasPrefix("-psn_") }
+    if !extra.isEmpty {
+        let joined = extra.joined(separator: " ")
+        if !joined.contains(featureName) {
+            log("Chrome pid \(app.processIdentifier) started with its own arguments; leaving it alone: \(joined.prefix(200))")
+        }
+        return false
+    }
+    return true
 }
 
 var busy = false
@@ -90,7 +104,7 @@ func relaunchWithFlag(_ app: NSRunningApplication) {
 
 func check(_ app: NSRunningApplication) {
     guard app.bundleIdentifier == chromeBundleID, !app.isTerminated else { return }
-    if !hasFlag(app) { relaunchWithFlag(app) }
+    if isPlainUserLaunch(app) { relaunchWithFlag(app) }
 }
 
 NSWorkspace.shared.notificationCenter.addObserver(
